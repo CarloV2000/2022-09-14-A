@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import it.polito.tdp.itunes.model.Album;
 import it.polito.tdp.itunes.model.Artist;
+import it.polito.tdp.itunes.model.CoppiaA;
 import it.polito.tdp.itunes.model.Genre;
 import it.polito.tdp.itunes.model.MediaType;
 import it.polito.tdp.itunes.model.Playlist;
@@ -17,17 +18,22 @@ import it.polito.tdp.itunes.model.Track;
 
 public class ItunesDAO {
 	
-	public List<Album> getAllAlbums(){
-		final String sql = "SELECT * FROM Album";
+	public List<Album> getAllAlbums(double durataMS){
+		final String sql = "SELECT a.*, sum(t.Milliseconds)AS durata "
+				+ "FROM album a, track t "
+				+ "WHERE a.AlbumId=t.AlbumId "
+				+ "GROUP BY a.AlbumId "
+				+ "HAVING durata >= ? ";
 		List<Album> result = new LinkedList<>();
 		
 		try {
 			Connection conn = DBConnect.getConnection();
 			PreparedStatement st = conn.prepareStatement(sql);
+			st.setDouble(1, durataMS);
 			ResultSet res = st.executeQuery();
 
 			while (res.next()) {
-				result.add(new Album(res.getInt("AlbumId"), res.getString("Title"), 0.0));
+				result.add(new Album(res.getInt("AlbumId"), res.getString("Title"), res.getDouble("durata")));
 			}
 			conn.close();
 		} catch (SQLException e) {
@@ -131,6 +137,36 @@ public class ItunesDAO {
 
 			while (res.next()) {
 				result.add(new MediaType(res.getInt("MediaTypeId"), res.getString("Name")));
+			}
+			conn.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+			throw new RuntimeException("SQL Error");
+		}
+		return result;
+	}
+	
+	public List<CoppiaA> getAllCoppie(Map<Integer,Album>idMap){
+		final String sql = "SELECT DISTINCTROW a1.AlbumId AS a1, a2.AlbumId AS a2 "
+				+ "FROM album a1, album a2, track t1, track t2, playlisttrack p1, playlisttrack p2 "
+				+ "WHERE a1.AlbumId=t1.AlbumId "
+				+ "AND a2.AlbumId=t2.AlbumId "
+				+ "AND p1.TrackId=t1.TrackId "
+				+ "AND a1.AlbumId!=a2.AlbumId "
+				+ "AND p2.TrackId=t2.TrackId "
+				+ "AND p1.PlaylistId=p2.PlaylistId ";
+		List<CoppiaA> result = new LinkedList<>();
+		
+		try {
+			Connection conn = DBConnect.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			ResultSet res = st.executeQuery();
+
+			while (res.next()) {
+				Album a1 = idMap.get(res.getInt("a1"));
+				Album a2 = idMap.get(res.getInt("a2"));		
+				CoppiaA ca = new CoppiaA(a1, a2);
+				result.add(ca);
 			}
 			conn.close();
 		} catch (SQLException e) {
